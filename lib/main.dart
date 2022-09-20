@@ -53,7 +53,12 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: TableEventsExample(),
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('TableCalendar - Events'),
+        ),
+        body: TableEventsExample(),
+      ),
     );
   }
 }
