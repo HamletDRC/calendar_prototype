@@ -20,27 +20,53 @@ void main() async {
 Future<void> initializeCalendar() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final icsFiles = ['assets/bvd.ics', 'assets/wspd.ics'];
+  final fileName = 'assets/baumlihof_calendar.ics';
 
-  icsFiles.forEach((fileName) async {
-    // read the .ics file out of the /assets folder
-    final icsAsString = await rootBundle.loadString(fileName);
-    final iCalendar = ICalendar.fromString(icsAsString);
+  // read the .ics file out of the /assets folder
+  final icsAsString = await rootBundle.loadString(fileName);
+  final iCalendar = ICalendar.fromString(icsAsString);
 
-    // try to find the summary field and calendar start
-    final summary = iCalendar.data.firstWhere((e) => e.containsKey('summary'))['summary'];
-    final calendarStartTime = iCalendar.data.firstWhere((e) => e.containsKey('dtstart'))['dtstart'];
+  // try to find the summary field and calendar start
+  final allCalendarEntries = iCalendar.data.where((e) {
+    return e.containsKey('summary') && e.containsKey('dtstart');
+  });
+
+  allCalendarEntries.forEach((calendarEntry) {
+    final summary = calendarEntry['summary'];
+    final calendarStartTime = calendarEntry['dtstart'];
 
     // make sure the data is not missing!
     if (summary == null) {
-      print('could not find summary for $fileName');
+      stderr.writeln('could not find summary for $fileName');
     } else if (calendarStartTime == null) {
-      print('could not find start time for $fileName');
+      stderr.writeln('could not find start time for $fileName');
     } else {
       // convert the date from the iCalendar format into a standard Flutter DateTime
-      final startTime = calendarStartTime.toDateTime();
+      var startTime = calendarStartTime.toDateTime();
+      final recurRule = calendarEntry['rrule'];
       final event = Event(summary);
-      ALL_EVENTS[startTime] = [event];
+
+      if (recurRule == null) {
+        // calendar event is not recurring (i.e. weekly). Just add it.
+        if (ALL_EVENTS[startTime] == null) {
+          ALL_EVENTS[startTime] = []; // there can be multiple events on a single day
+        }
+        ALL_EVENTS[startTime]?.add(event);
+      } else if (recurRule.contains("FREQ=WEEKLY")) {
+        // calendar event is recurring weekly, so add event multiple times.
+        while (startTime.isBefore(endOfCalendar)) {
+          if (startTime.isAfter(startOfCalendar)) {
+            if (ALL_EVENTS[startTime] == null) {
+              ALL_EVENTS[startTime] = []; // there can be multiple events on a single day
+            }
+            ALL_EVENTS[startTime]?.add(event);
+          }
+          startTime = startTime.add(Duration(days: 7)); // move forward a week in time.
+        }
+      } else {
+        // calendar event is recurring monthly or something that we don't know how to handle
+        stderr.writeln("Unknown rrule: $recurRule");
+      }
     }
   });
 }
